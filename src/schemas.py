@@ -36,6 +36,31 @@ class AgentAction(str, Enum):
     ESCALATE = "escalate"
 
 
+class ProposedTool(str, Enum):
+    RESET_PASSWORD = "reset_password"
+    LOOKUP_EMPLOYEE = "lookup_employee"
+    GRANT_FILE_ACCESS = "grant_file_access"
+    QUERY_HR_DATABASE = "query_hr_database"
+    ESCALATE_TO_HUMAN = "escalate_to_human"
+    NONE = "none"
+
+
+class IntentType(str, Enum):
+    RESET_PASSWORD = "reset_password"
+    LOOKUP_EMPLOYEE = "lookup_employee"
+    GRANT_FILE_ACCESS = "grant_file_access"
+    QUERY_HR_POLICY = "query_hr_policy"
+    QUERY_HR_INDIVIDUAL = "query_hr_individual"
+    ESCALATE = "escalate"
+    UNKNOWN = "unknown"
+
+
+class RiskLevel(str, Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+
 class RequesterContext(BaseModel):
     employee_id: str
     name: str
@@ -56,26 +81,33 @@ class RequestContext(BaseModel):
 
 
 class IntentExtraction(BaseModel):
-    intent: str
-    requested_action: Optional[str] = None
+    intent: IntentType
+    target_employee_query: Optional[str] = None
     target_employee_id: Optional[str] = None
-    target_employee_name: Optional[str] = None
-    target_drive_id: Optional[str] = None
-    target_drive_name: Optional[str] = None
     requested_fields: List[str] = Field(default_factory=list)
-    confidence: float = 0.0
-    rationale: Optional[str] = None
+    drive_query: Optional[str] = None
+    drive_id: Optional[str] = None
+    access_level: Optional[str] = None
+    duration_days: Optional[int] = None
+    business_justification: Optional[str] = None
+    query_type: Optional[str] = None
+    user_claims: List[str] = Field(default_factory=list)
+    risk_level: RiskLevel = RiskLevel.MEDIUM
+    asks_for_human: bool = False
+    raw_summary: str = ""
 
 
 class PolicyDecisionProposal(BaseModel):
-    action: AgentAction
-    rationale: str
-    allowed_fields: List[str] = Field(default_factory=list)
-    denied_fields: List[str] = Field(default_factory=list)
-    conditions: List[str] = Field(default_factory=list)
-    policy_references: List[str] = Field(default_factory=list)
-    escalation_reason: Optional[str] = None
-    clarification_question: Optional[str] = None
+    proposed_action: AgentAction
+    proposed_tool: ProposedTool = ProposedTool.NONE
+    tool_args: Dict[str, Any] = Field(default_factory=dict)
+    allowed_fields_to_show: List[str] = Field(default_factory=list)
+    blocked_fields: List[str] = Field(default_factory=list)
+    policy_citations: List[str] = Field(default_factory=list)
+    reasoning_summary: str = ""
+    risk_level: RiskLevel = RiskLevel.MEDIUM
+    requires_escalation: bool = False
+    user_facing_explanation: str = ""
 
 
 class ToolCallRecord(BaseModel):

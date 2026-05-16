@@ -2,7 +2,6 @@ pydantic
 python-dotenv
 requests
 sentence-transformers
-scikit-learn
 numpy
 rich
 pytest

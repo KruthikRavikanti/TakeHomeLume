@@ -43,6 +43,10 @@ Policy Agent is a Python 3.10+ take-home project for an internal IT helpdesk age
 - [x] Policy content populated
 - [x] Policy cards complete
 - [x] Graph-aware hybrid policy retrieval complete
+- [x] Ollama LLM client complete
+- [x] JSON parser complete
+- [x] Intent extraction complete
+- [x] LLM policy reasoner complete
 - [ ] Agent orchestration implemented
 - [ ] Safe tool execution implemented
 - [ ] Evaluation runner implemented
@@ -51,6 +55,74 @@ Policy Agent is a Python 3.10+ take-home project for an internal IT helpdesk age
 ## Model Choice
 
 The initial model target is Llama 3.1 8B via Ollama, configured with `LLM_PROVIDER=ollama`, `OLLAMA_BASE_URL=http://localhost:11434`, and `OLLAMA_MODEL=llama3.1:8b`.
+
+## LLM Setup
+
+This project uses a single local LLM, `llama3.1:8b` through Ollama, for later intent extraction, policy reasoning, response generation, and synthetic scenario generation. A local model was chosen so the project can be run without paid API keys or usage costs.
+
+1. Install Ollama.
+
+2. Pull the local model:
+
+   ```bash
+   ollama pull llama3.1:8b
+   ```
+
+3. Verify manually:
+
+   ```bash
+   ollama run llama3.1:8b
+   ```
+
+4. Run the project JSON-mode test:
+
+   ```bash
+   python -m src.cli llm-test "Return JSON with hello set to world"
+   ```
+
+5. Run a raw generation test:
+
+   ```bash
+   python -m src.cli llm-raw "Say hello in one sentence."
+   ```
+
+The LLM client does not execute tools and does not enforce policy. Later steps will use it only to produce structured proposals. Deterministic policy enforcement will happen outside the LLM.
+
+## Intent Extraction
+
+Intent extraction is the first LLM-powered step in the agent pipeline. It converts natural-language requests into structured JSON, including intent, target employee, requested fields, drive target, duration, business justification, user claims, and rough linguistic risk.
+
+Intent extraction does not authorize, deny, escalate, or call tools. It is intentionally non-authoritative. Later steps retrieve relevant policy sections, ask the LLM for a policy proposal, and then use a deterministic policy guard to enforce hard rules.
+
+Example:
+
+```bash
+python -m src.cli intent --trust blue --requester EMP-2200 "Can I get David Kim's work email?"
+```
+
+Expected shape:
+
+```json
+{
+  "intent": "lookup_employee",
+  "target_employee_query": "David Kim",
+  "requested_fields": ["work_email"],
+  "risk_level": "low"
+}
+```
+
+## Policy Reasoning Proposal
+
+The policy reasoner is the second LLM-powered step. It receives the verified request context, extracted intent, and graph-aware retrieved policy evidence. It proposes an action, tool, tool arguments, fields to show or block, citations, and a user-facing explanation.
+
+This proposal is not final. The LLM does not execute tools and does not enforce policy. The next step is a deterministic policy guard that checks trust-tier restrictions, explicit prohibitions, narrow exceptions, and tool permissions.
+
+Examples:
+
+```bash
+python -m src.cli reason --trust blue --requester EMP-2200 "Can I get David Kim's work email?"
+python -m src.cli reason --trust blue --requester EMP-3300 "What's Sarah Chen's salary?"
+```
 
 ## Mock Data Model
 
@@ -91,6 +163,8 @@ The retriever uses graph-aware hybrid retrieval:
 5. It returns a compact evidence bundle for the LLM reasoner.
 
 This design avoids a common failure mode of naive chunking: losing the cross-references that make policy documents coherent. Policy documents are naturally structured by section numbers, and a graph preserves parent rules, child details, exceptions, and referenced rules.
+
+The retriever may initially match detailed leaf clauses because important policy language often lives in subsections. Graph expansion then adds the parent rule and referenced sections, so the evidence bundle includes both the specific policy detail and the broader controlling rule.
 
 BM25 helps exact terms like `salary`, `legal-hold`, `service account`, and `Team Red`. Embeddings help with paraphrased user requests.
 

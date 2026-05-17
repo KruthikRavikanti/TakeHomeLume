@@ -3,7 +3,9 @@ from __future__ import annotations
 import json
 import os
 import re
+import sys
 import warnings
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -308,9 +310,10 @@ class PolicyRetriever:
             return None
 
         try:
-            from sentence_transformers import SentenceTransformer
+            with _suppress_hf_auth_stderr_warning():
+                from sentence_transformers import SentenceTransformer
 
-            return SentenceTransformer(self.embedding_model_name)
+                return SentenceTransformer(self.embedding_model_name)
         except Exception as exc:
             warnings.warn(
                 "PolicyRetriever could not load SentenceTransformer model "
@@ -495,6 +498,41 @@ def _fallback_keyword_scores(query: str, texts: List[str]) -> np.ndarray:
             continue
         scores.append(len(query_terms & terms) / len(query_terms))
     return _normalize_scores(np.asarray(scores, dtype=float))
+
+
+@contextmanager
+def _suppress_hf_auth_stderr_warning():
+    original_stdout = sys.stdout
+    original_stderr = sys.stderr
+    sys.stdout = _HfAuthWarningFilter(original_stdout)
+    sys.stderr = _HfAuthWarningFilter(original_stderr)
+    try:
+        yield
+    finally:
+        sys.stdout = original_stdout
+        sys.stderr = original_stderr
+
+
+class _HfAuthWarningFilter:
+    _MESSAGE = "unauthenticated requests to the HF Hub"
+
+    def __init__(self, wrapped):
+        self._wrapped = wrapped
+
+    def write(self, text: str) -> int:
+        if self._MESSAGE in text:
+            return len(text)
+        return self._wrapped.write(text)
+
+    def flush(self) -> None:
+        self._wrapped.flush()
+
+    def isatty(self) -> bool:
+        return self._wrapped.isatty()
+
+    @property
+    def encoding(self) -> str | None:
+        return self._wrapped.encoding
 
 
 def _tokenize(text: str) -> List[str]:

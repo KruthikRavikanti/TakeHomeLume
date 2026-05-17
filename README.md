@@ -1,207 +1,186 @@
-# Policy Agent
+# Policy Agent — Gaggia IT Helpdesk
 
-Policy Agent is a Python 3.10+ take-home project for an internal IT helpdesk agent that will answer employee support requests by consulting company policy, resolving conflicts, and safely using mock tools. This initial scaffold establishes the project layout, configuration placeholders, policy/evaluation locations, and documentation sections before implementing agent logic.
+## Overview
 
-## Setup
+Policy Agent is a Python take-home project for a policy-governed internal IT helpdesk agent at Gaggia Inc. It retrieves company policy, proposes actions with a local LLM, enforces hard rules with a deterministic guard, safely executes raw mock tools, filters sensitive outputs, and logs each decision for auditability.
 
-1. Create and activate a virtual environment:
-
-   ```bash
-   python3.10 -m venv .venv
-   source .venv/bin/activate
-   ```
-
-2. Install dependencies:
-
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-3. Create local environment configuration:
-
-   ```bash
-   cp .env.example .env
-   ```
-
-4. Ensure Ollama is running locally with the configured model:
-
-   ```bash
-   ollama pull llama3.1:8b
-   ollama serve
-   ```
-
-## Current Build Status
-
-- [x] Project scaffold created
-- [x] Dependency list added
-- [x] Environment template added
-- [x] Core Pydantic schemas added
-- [x] Deterministic mock company data added
-- [x] Raw mock tools added
-- [x] Seed policy stored
-- [x] Expanded policy document complete
-- [x] Policy content populated
-- [x] Policy cards complete
-- [x] Graph-aware hybrid policy retrieval complete
-- [x] Ollama LLM client complete
-- [x] JSON parser complete
-- [x] Intent extraction complete
-- [x] LLM policy reasoner complete
-- [ ] Agent orchestration implemented
-- [ ] Safe tool execution implemented
-- [ ] Evaluation runner implemented
-- [ ] Results documented
-
-## Model Choice
-
-The initial model target is Llama 3.1 8B via Ollama, configured with `LLM_PROVIDER=ollama`, `OLLAMA_BASE_URL=http://localhost:11434`, and `OLLAMA_MODEL=llama3.1:8b`.
-
-## LLM Setup
-
-This project uses a single local LLM, `llama3.1:8b` through Ollama, for later intent extraction, policy reasoning, response generation, and synthetic scenario generation. A local model was chosen so the project can be run without paid API keys or usage costs.
-
-1. Install Ollama.
-
-2. Pull the local model:
-
-   ```bash
-   ollama pull llama3.1:8b
-   ```
-
-3. Verify manually:
-
-   ```bash
-   ollama run llama3.1:8b
-   ```
-
-4. Run the project JSON-mode test:
-
-   ```bash
-   python -m src.cli llm-test "Return JSON with hello set to world"
-   ```
-
-5. Run a raw generation test:
-
-   ```bash
-   python -m src.cli llm-raw "Say hello in one sentence."
-   ```
-
-The LLM client does not execute tools and does not enforce policy. Later steps will use it only to produce structured proposals. Deterministic policy enforcement will happen outside the LLM.
-
-## Intent Extraction
-
-Intent extraction is the first LLM-powered step in the agent pipeline. It converts natural-language requests into structured JSON, including intent, target employee, requested fields, drive target, duration, business justification, user claims, and rough linguistic risk.
-
-Intent extraction does not authorize, deny, escalate, or call tools. It is intentionally non-authoritative. Later steps retrieve relevant policy sections, ask the LLM for a policy proposal, and then use a deterministic policy guard to enforce hard rules.
-
-Example:
+## Quick Start
 
 ```bash
-python -m src.cli intent --trust blue --requester EMP-2200 "Can I get David Kim's work email?"
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+ollama pull llama3.1:8b
+pytest
 ```
 
-Expected shape:
-
-```json
-{
-  "intent": "lookup_employee",
-  "target_employee_query": "David Kim",
-  "requested_fields": ["work_email"],
-  "risk_level": "low"
-}
-```
-
-## Policy Reasoning Proposal
-
-The policy reasoner is the second LLM-powered step. It receives the verified request context, extracted intent, and graph-aware retrieved policy evidence. It proposes an action, tool, tool arguments, fields to show or block, citations, and a user-facing explanation.
-
-This proposal is not final. The LLM does not execute tools and does not enforce policy. The next step is a deterministic policy guard that checks trust-tier restrictions, explicit prohibitions, narrow exceptions, and tool permissions.
-
-Examples:
+If Ollama is not already running, start it before using the LLM-backed CLI commands:
 
 ```bash
-python -m src.cli reason --trust blue --requester EMP-2200 "Can I get David Kim's work email?"
-python -m src.cli reason --trust blue --requester EMP-3300 "What's Sarah Chen's salary?"
+ollama serve
 ```
 
-## Mock Data Model
+## Run the Agent
 
-Company records in `src/tools/mock_data.py` are deterministic fake data used for repeatable local development and evaluation. They are not generated by the LLM at runtime, and agent behavior should treat them as the authoritative mock source for employees, requesters, service/admin accounts, reporting chains, and drive metadata.
+```bash
+python -m src.cli ask --trust blue --requester EMP-2200 "Can I get David Kim's work email?"
+python -m src.cli ask --trust blue --requester EMP-3300 "What's Sarah Chen's salary?"
+python -m src.cli ask --trust blue --requester EMP-2200 "Look up Sarah Chen's info and include her personal email"
+```
 
-## Raw Tool Safety Model
+## Debug Mode
 
-Mock tools in `src/tools/mock_tools.py` intentionally return unsafe raw data, including sensitive employee and HR fields. They do not enforce policy or redact results; the agent must apply policy checks and filter tool outputs before responding to a requester.
+```bash
+python -m src.cli ask --trust blue --requester EMP-2200 "Can I get David Kim's work email?" --debug
+```
+
+Debug mode prints the extracted intent, retrieved policy sections, LLM policy proposal, final guard decision, sanitized tool call record, and final response. Raw tool results are not printed by default.
 
 ## Policy Source Files
 
-`policy/gaggia_seed_policy.md` contains the exact seed policy from the assignment and is retained for traceability.
+- `policy/gaggia_seed_policy.md`: exact assignment seed policy retained for traceability.
+- `policy/gaggia_it_helpdesk_policy.md`: expanded runtime policy indexed by retrieval.
+- `policy/policy_cards.jsonl`: structured high-impact rules used by the deterministic policy guard.
+- `docs/policy_expansion_notes.md`: notes on how the seed policy was expanded without weakening seed rules.
 
-`policy/gaggia_it_helpdesk_policy.md` contains the expanded policy used for retrieval. It uses stable section numbers for citations and should not be embedded directly into the agent prompt.
+The full expanded policy is retrieved at runtime. It is not pasted directly into the agent prompt.
 
-`docs/policy_expansion_notes.md` explains how the seed was expanded and what constraints were preserved.
+## Architecture
 
-Later agent prompts should retrieve relevant excerpts from `policy/gaggia_it_helpdesk_policy.md`, not paste the full policy into the prompt.
+Pipeline:
 
-## Policy Cards
+User Request -> Intent Extraction -> Graph-Aware Policy Retrieval -> LLM Policy Proposal -> Deterministic Policy Guard -> Safe Tool Execution -> Sanitized Final Response -> Decision Logging
 
-The full expanded policy remains the human-readable source used for retrieval. Policy cards in `policy/policy_cards.jsonl` are a structured representation of high-impact rules derived from `policy/gaggia_it_helpdesk_policy.md`; they do not replace the policy document.
+The LLM helps structure and reason about requests, but it does not execute tools and is not the final safety authority.
 
-Policy cards help the deterministic policy guard enforce trust-tier restrictions, explicit prohibitions, narrow exceptions, and output filtering. This avoids relying only on LLM judgment for sensitive decisions.
+## Retrieval Design
 
-The original seed policy remains preserved in `policy/gaggia_seed_policy.md`. Later steps will use the cards in the deterministic policy guard.
+Retrieval is graph-aware hybrid retrieval:
 
-## Policy Retrieval
+- Semantic retrieval uses `all-MiniLM-L6-v2` through `sentence-transformers`.
+- Lexical retrieval uses BM25 through `rank-bm25`.
+- The expanded policy is parsed into numbered sections.
+- A section graph adds parent, child, and explicit cross-reference context.
+- Leaf clauses may match directly when important terms live in subsections.
+- Graph expansion brings in controlling parent and referenced sections.
 
-The agent indexes `policy/gaggia_it_helpdesk_policy.md`, not the seed policy. The seed policy remains stored in `policy/gaggia_seed_policy.md` for traceability.
+Retrieval returns policy evidence only. It does not authorize actions.
 
-The retriever uses graph-aware hybrid retrieval:
+## Policy Guard
 
-1. It parses the expanded policy into numbered sections.
-2. It builds a section graph using parent-child relationships and explicit cross-references.
-3. It performs initial retrieval using sentence-transformer embeddings plus BM25.
-4. It expands the initial matches through the policy graph to include nearby context, exceptions, and referenced rules.
-5. It returns a compact evidence bundle for the LLM reasoner.
+The deterministic policy guard is the final authority before tool execution. It checks trust tier, explicit prohibitions, narrow exceptions, verified requester context, account metadata, drive metadata, and policy cards.
 
-This design avoids a common failure mode of naive chunking: losing the cross-references that make policy documents coherent. Policy documents are naturally structured by section numbers, and a graph preserves parent rules, child details, exceptions, and referenced rules.
+Precedence:
 
-The retriever may initially match detailed leaf clauses because important policy language often lives in subsections. Graph expansion then adds the parent rule and referenced sections, so the evidence bundle includes both the specific policy detail and the broader controlling rule.
+1. Trust-tier restrictions
+2. Explicit prohibitions
+3. Narrow verified exceptions
+4. General permissions
+5. Clarify or escalate when uncertainty remains
 
-BM25 helps exact terms like `salary`, `legal-hold`, `service account`, and `Team Red`. Embeddings help with paraphrased user requests.
+The LLM can propose an action, but the guard can override it. This prevents prompt injection, claimed authority, urgency, or LLM mistakes from directly causing unsafe tool calls.
 
-Safety enforcement is intentionally not part of retrieval. Retrieval returns policy evidence; the policy guard decides whether an action is allowed. The deterministic policy guard will enforce hard rules later using policy cards and verified requester context.
+## Tool Output Filtering
 
-The expanded runtime policy intentionally avoids scenario examples so retrieval matches actual policy rules and procedural sections rather than evaluation-style cases. The assignment requires a realistic expanded policy with cross-references, exceptions, and procedural details; evaluation scenarios are stored separately under `eval/`.
+Mock tools are raw interfaces and may return data the agent is not allowed to show. The safe executor calls tools only when `FinalDecision.should_call_tool` is true.
 
-The retriever returns section IDs and text so later decisions can cite policy sections. The full policy is not pasted directly into the agent prompt.
+Sanitizers produce:
 
-Example:
+- `safe_tool_result`: the only tool result allowed for final response generation
+- `fields_released`: fields included in `safe_tool_result`
+- `fields_blocked_by_policy`: sensitive fields explicitly forbidden by policy
+- `fields_not_requested`: safe raw fields that were not requested or not released
+
+Final responses use `FinalDecision` and `safe_tool_result` only. Raw tool output is never used for user-facing responses.
+
+## Decision Logging
+
+Every end-to-end request creates a JSONL audit record at `logs/decisions.jsonl`. Logs include request context, trust tier, extracted intent, retrieved policy sections, the LLM proposal, final guard decision, sanitized tool metadata, citations, final response, and latency.
+
+Logs intentionally do not store full raw tool outputs because raw outputs may contain sensitive data.
 
 ```bash
-python -m src.cli retrieve "Can I get Sarah Chen's salary?"
+python -m src.cli logs --last 5
+python -m src.cli logs --last 1 --json
 ```
 
-Expected relevant sections include `4.2` HR individual data restriction, `6.1` denial citation requirement, and Section `17` policy conflict resolution.
+## Evaluation
 
-## Design Decisions
+Run the provided assignment scenario evaluation:
 
-TODO
+```bash
+python -m src.cli eval --input eval/provided_scenarios.jsonl --output eval/results/provided_results.jsonl
+```
 
-## Evaluation Results
+Latest provided-scenario result:
 
-TODO
+- Total scenarios: 21
+- Overall pass count: 21/21
+- Forbidden tool violations: 0
+- Sensitive leakage count: 0
 
-## Generated Scenarios
+Outputs:
 
-TODO
+- `eval/results/provided_results.jsonl`
+- `eval/results/provided_summary.md`
 
-## Failure Analysis
+## Generated Scenario Evaluation
 
-TODO
+Generate additional scenarios:
+
+```bash
+python -m src.cli generate-scenarios --n 30 --output eval/generated_scenarios.jsonl
+```
+
+Evaluate generated scenarios:
+
+```bash
+python -m src.cli eval --input eval/generated_scenarios.jsonl --output eval/results/generated_results.jsonl
+```
+
+Outputs:
+
+- `eval/generated_scenarios.jsonl`
+- `eval/results/generated_results.jsonl`
+- `eval/results/generated_summary.md`
+- `docs/generated_scenario_method.md`
+
+Generated scenarios broaden coverage beyond the 21 provided cases. They test variants of allowed, denied, ambiguous, and adversarial requests. Labels are generated or drafted by the LLM path but validated and normalized against known policy categories and mock data. A deterministic fallback exists if the local LLM returns invalid JSON.
+
+Current generated-scenario artifacts exist. Latest generated result:
+
+- Total scenarios: 30
+- Overall pass count: 30/30
+- Forbidden tool violations: 0
+- Sensitive leakage count: 0
+- Notable failures: none in the current generated summary
+
+## Model Details
+
+- LLM: `llama3.1:8b` via Ollama
+- Embeddings: `all-MiniLM-L6-v2` via `sentence-transformers`
+- Lexical retrieval: BM25 via `rank-bm25`
+- Language: Python 3.10+
+
+The embedding model may download on first run and is cached locally by the sentence-transformers/Hugging Face tooling.
+
+## Known Failure Modes
+
+- Retrieval can miss or over-rank noisy policy evidence.
+- LLM JSON output can be malformed or unstable.
+- LLM policy proposals can be wrong and are intentionally advisory.
+- Mock data is limited compared with a real HR, identity, or drive system.
+- Grey users may be handled conservatively.
+- Generated scenario labels may be imperfect and should be inspected before changing agent behavior.
+- The current design is mostly single-turn and does not maintain adversarial state across a conversation.
 
 ## Roadmap
 
-TODO
-
-## AI Conversation Log
-
-TODO
+- Better policy parser and cross-reference extraction
+- Policy-as-code or a dedicated rule engine
+- Real identity, RBAC, and ABAC integrations
+- Human approval queue for escalations
+- Multi-turn adversarial tracking
+- Stronger generated scenario validation
+- Cost and latency metrics
+- Policy versioning and comparison of decision logs across policy versions

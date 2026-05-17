@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -112,32 +111,50 @@ class PolicyDecisionProposal(BaseModel):
 
 class ToolCallRecord(BaseModel):
     tool_name: str
-    arguments: Dict[str, Any] = Field(default_factory=dict)
-    success: bool
-    result_summary: Optional[str] = None
+    tool_args: Dict[str, Any] = Field(default_factory=dict)
+    called: bool = False
+    raw_tool_result: Optional[Dict[str, Any]] = None
+    safe_tool_result: Optional[Dict[str, Any]] = None
+    raw_fields_received: List[str] = Field(default_factory=list)
+    fields_released: List[str] = Field(default_factory=list)
+    fields_blocked_by_policy: List[str] = Field(default_factory=list)
+    fields_not_requested: List[str] = Field(default_factory=list)
     error: Optional[str] = None
 
 
 class FinalDecision(BaseModel):
-    action: AgentAction
-    response: str
-    rationale: str
-    allowed_data: Dict[str, Any] = Field(default_factory=dict)
-    denied_fields: List[str] = Field(default_factory=list)
-    policy_references: List[str] = Field(default_factory=list)
-    tool_calls: List[ToolCallRecord] = Field(default_factory=list)
+    final_action: AgentAction
+    final_tool: ProposedTool = ProposedTool.NONE
+    final_tool_args: Dict[str, Any] = Field(default_factory=dict)
+    allowed_fields_to_show: List[str] = Field(default_factory=list)
+    blocked_fields: List[str] = Field(default_factory=list)
+    policy_citations: List[str] = Field(default_factory=list)
+    reason: str = ""
+    should_call_tool: bool = False
+    escalation_reason: Optional[str] = None
+    warnings: List[str] = Field(default_factory=list)
 
 
 class DecisionLogRecord(BaseModel):
     request_id: str
     conversation_id: str
-    trust_tier: TrustTier
-    requester_employee_id: str
-    intent: IntentExtraction
-    proposal: PolicyDecisionProposal
-    final_decision: FinalDecision
-    tool_calls: List[ToolCallRecord] = Field(default_factory=list)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: str
+    trust_tier: str
+    requester_id: str
+    requester_name: Optional[str] = None
+    requester_department: Optional[str] = None
+    requester_team: Optional[str] = None
+    requester_role: Optional[str] = None
+    requester_verified: bool
+    user_message: str
+    extracted_intent: Dict[str, Any] = Field(default_factory=dict)
+    retrieved_policy_sections: List[Dict[str, Any]] = Field(default_factory=list)
+    policy_proposal: Dict[str, Any] = Field(default_factory=dict)
+    final_decision: Dict[str, Any] = Field(default_factory=dict)
+    tool_call: Dict[str, Any] = Field(default_factory=dict)
+    final_response: str
+    latency_ms: Optional[float] = None
+    warnings: List[str] = Field(default_factory=list)
 
 
 class EmployeeRecord(BaseModel):

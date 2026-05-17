@@ -78,7 +78,7 @@ def extract_intent(request: RequestContext) -> IntentExtraction:
     try:
         intent = normalize_intent_payload(parsed)
         intent.user_claims = filter_user_claims_for_message(intent.user_claims, request.message)
-        return intent
+        return apply_message_heuristics(intent, request.message)
     except (TypeError, ValueError, ValidationError) as exc:
         return IntentExtraction(
             intent=IntentType.UNKNOWN,
@@ -88,6 +88,35 @@ def extract_intent(request: RequestContext) -> IntentExtraction:
             asks_for_human=False,
             raw_summary=f"Intent extraction normalization failed: {exc}",
         )
+
+
+def apply_message_heuristics(intent: IntentExtraction, message: str) -> IntentExtraction:
+    """Patch obvious extraction misses without making policy decisions."""
+    lowered = message.lower()
+    mentioned_fields = _fields_mentioned_in_message(lowered)
+    sensitive_or_personal = {
+        "personal_email",
+        "personal_phone",
+        "home_address",
+        "salary",
+        "performance_rating",
+        "disciplinary_actions",
+        "employment_status",
+    }
+    if mentioned_fields and (
+        intent.intent == IntentType.UNKNOWN
+        or any(field in sensitive_or_personal for field in mentioned_fields)
+    ):
+        intent.requested_fields = normalize_requested_fields([*intent.requested_fields, *mentioned_fields])
+
+    if _looks_like_employee_lookup(lowered) and any(
+        field in {"personal_email", "personal_phone", "home_address"} for field in intent.requested_fields
+    ):
+        intent.intent = IntentType.LOOKUP_EMPLOYEE
+        if not intent.target_employee_query:
+            intent.target_employee_query = _extract_person_name(message)
+
+    return intent
 
 
 def normalize_intent_payload(payload: dict[str, Any]) -> IntentExtraction:
@@ -216,6 +245,23 @@ def _normalize_field_name(value: Any) -> str | None:
         return canonical
     compact = normalized.replace(" ", "_")
     return FIELD_ALIASES.get(compact, compact if compact else None)
+
+
+def _fields_mentioned_in_message(message: str) -> list[str]:
+    fields = []
+    for alias, field in FIELD_ALIASES.items():
+        if alias in message:
+            fields.append(field)
+    return normalize_requested_fields(fields)
+
+
+def _looks_like_employee_lookup(message: str) -> bool:
+    return any(term in message for term in ["look up", "lookup", "info", "profile", "details"])
+
+
+def _extract_person_name(message: str) -> str | None:
+    match = re.search(r"\b([A-Z][a-z]+ [A-Z][a-z]+)\b", message)
+    return match.group(1) if match else None
 
 
 def _optional_string(value: Any) -> str | None:

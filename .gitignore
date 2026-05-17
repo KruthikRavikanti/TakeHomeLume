@@ -1,6 +1,13 @@
 .venv/
 __pycache__/
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.cache/
 *.py[cod]
 .env
 .DS_Store
+.coverage
+htmlcov/
+logs/*.jsonl
+!logs/.gitkeep

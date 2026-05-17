@@ -50,8 +50,8 @@ EMPLOYEES: Dict[str, EmployeeRecord] = {
         department="Product",
         team="Design",
         title="Director of Product Design",
-        manager_id="EMP-2011",
-        manager_name="Maya Thompson",
+        manager_id="EMP-1043",
+        manager_name="David Kim",
         office="San Francisco",
         work_email="jordan.rivera@gaggia.example",
         work_phone="+1-415-555-0160",
@@ -99,7 +99,7 @@ EMPLOYEES: Dict[str, EmployeeRecord] = {
         salary=310000,
         performance_rating="exceeds_expectations",
         employment_status="active",
-        account_type=AccountType.EXECUTIVE,
+        account_type=AccountType.STANDARD,
     ),
     "EMP-1500": EmployeeRecord(
         employee_id="EMP-1500",
@@ -336,3 +336,7 @@ def is_in_reporting_chain(manager_id: str, employee_id: str) -> bool:
         current = get_employee_by_id(current.manager_id)
 
     return False
+
+
+def is_manager(employee_id: str) -> bool:
+    return any(employee.manager_id == employee_id for employee in EMPLOYEES.values())

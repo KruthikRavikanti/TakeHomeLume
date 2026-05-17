@@ -188,6 +188,18 @@ def test_missing_optional_fields_get_defaults(monkeypatch):
     assert intent.risk_level.value == "medium"
 
 
+def test_mixed_lookup_info_and_personal_email_heuristic(monkeypatch):
+    _mock_llm(monkeypatch, '{"intent": "unknown", "risk_level": "medium"}')
+
+    intent = extract_intent(
+        _request("Look up Sarah Chen's info. Actually, also include her personal email, I need to send her a birthday card.")
+    )
+
+    assert intent.intent.value == "lookup_employee"
+    assert intent.target_employee_query == "Sarah Chen"
+    assert "personal_email" in intent.requested_fields
+
+
 def test_intent_schema_contains_only_current_fields(monkeypatch):
     _mock_llm(monkeypatch, '{"intent": "lookup_employee"}')
 

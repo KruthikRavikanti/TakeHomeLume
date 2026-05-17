@@ -32,7 +32,7 @@ def reset_password(employee_id: str) -> dict:
         "employee_id": employee.employee_id,
         "account_type": employee.account_type.value,
         "temp_password": f"Temp-{employee.employee_id}-Reset-2026",
-        "expires_in": "30 minutes",
+        "expires_in": "24 hours",
     }
 
 
